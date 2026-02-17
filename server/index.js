@@ -7,8 +7,9 @@ import taskRouter from "./src/routes/tasks/task.js";
 import  authenticate from "./src/middleware/auth.middleware.js";
 import cors from "cors";
 
+
 const app = express();
-const PORT = 3005;
+const PORT = process.env.PORT;
 
 dotenv.config();
 app.use(cors());
@@ -16,6 +17,15 @@ app.use(express.json());
 
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/tasks", authenticate, taskRouter);
+
+
+
+const swaggerDocument = JSON.parse(
+  fs.readFileSync(path.resolve("swagger/swagger.json"), "utf8")
+);
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
 
 app.use((err, req, res, next) => {
   console.error("GLOBAL ERROR:", err);
