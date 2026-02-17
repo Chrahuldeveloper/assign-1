@@ -1,90 +1,88 @@
-import express from 'express'
-const app = express()
+import express from "express";
 import bcrypt from "bcrypt";
-import { pool } from '../../../dbconfig'
+import jwt from "jsonwebtoken";
+import { pool } from "../../../dbconfig.js";
 
-app.get("/api/v1/auth/register", async (req, res) => {
+const router = express.Router();
 
-    try {
-        const client = await pool.connect();
+router.post("/register", async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { name, email, password } = req.body;
 
-        const { name, email, password, role } = req.body;
+    const existingUser = await client.query(
+      "SELECT user_id FROM users WHERE email = $1",
+      [email]
+    );
 
-        const userExists = await client.query("SELECT user_id FROM Users WHERE email=$1", [email])
-
-        if (userExists.rows.length > 0) {
-
-            return res.status(409).json({
-                message: "Email already registered"
-            });
-
-        }
-
-        const passwordHash = await bcrypt.hash(password, 12);
-
-        await client.query("INSERT INTO Users (name, email, password , role) VALUES ($1, $2, $3,$4)", [name, email, passwordHash, role])
-
-        res.status(201).json({
-            message: "User registered successfully",
-            user: result.rows[0]
-        });
-
-
-    } catch (error) {
-        console.log(error)
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({ message: "Email already registered" });
     }
 
-})
+    const passwordHash = await bcrypt.hash(password, 12);
 
+    const result = await client.query(
+      `
+      INSERT INTO users (name, email, password_hash, role)
+      VALUES ($1, $2, $3, 'USER')
+      RETURNING user_id, email, role
+      `,
+      [name, email, passwordHash]
+    );
 
-app.get("/api/v1/auth/login", async (req, res) => {
-    try {
+    res.status(201).json({
+      message: "User registered successfully",
+      user: result.rows[0]
+    });
+  } catch (err) {
+    next(err);
+  } finally {
+    client.release();
+  }
+});
 
-        const { email, password } = req.body
+router.post("/login", async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
 
-        const result = await pool.query("SELECT user_id FROM Users WHERE email=$!", [email])
+    const result = await pool.query(
+      `
+      SELECT user_id, email, password_hash, role
+      FROM users
+      WHERE email = $1
+      `,
+      [email]
+    );
 
-        if (result.rows.length === 0) {
-            return res.status(401).json({
-                message: "Invalid email or password"
-            });
-        }
-
-
-        const user = result.rows[0];
-
-        const isValid = await bcrypt.compare(
-            password,
-            user.password_hash
-        );
-
-        if (!isValid) {
-            return res.status(401).json({
-                message: "Invalid email or password"
-            });
-        }
-
-        const token = jwt.sign(
-            {
-                userId: user.id,
-                role: user.role
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: "1d" }
-        );
-
-        res.status(200).json({
-            message: "Login successful",
-            token,
-            user: {
-                id: user.id,
-                email: user.email,
-                role: user.role
-            }
-        });
-
-
-    } catch (error) {
-        console.log(error)
+    if (result.rows.length === 0) {
+      return res.status(401).json({ message: "Invalid email or password" });
     }
-})
+
+    const user = result.rows[0];
+    const isValid = await bcrypt.compare(password, user.password_hash);
+
+    if (!isValid) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    const token = jwt.sign(
+      { userId: user.user_id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    res.json({
+      message: "Login successful",
+      token,
+      user: {
+        id: user.user_id,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+export default router;

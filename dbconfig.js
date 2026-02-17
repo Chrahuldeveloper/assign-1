@@ -1,54 +1,40 @@
-import { Pool } from "pg"
+import pkg from "pg";
+const { Pool } = pkg;
 
-const pool = new Pool({
-    user: 'rahul',
-    host: 'localhost',
-    database: 'assign_1',
-    password: 'rahul123',
-    port: 5432,
-})
+export const pool = new Pool({
+  user: "rahul",
+  host: "localhost",
+  database: "assign_1",
+  password: "rahul123",
+  port: 5432
+});
 
+export const createUsersTable = async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT DEFAULT 'USER',
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
 
-async function createUsersTable() {
-    try {
-        const q = `
-        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-        CREATE TABLE IF NOT EXISTS Users ( 
-        user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-        name TEXT NOT NULL,
-        email TEXT NOT NULL UNIQUE,
-        password_hash TEXT NOT NULL,
-        role TEXT NOT NULL CHECK (role IN ('USER', 'ADMIN')) DEFAULT 'USER',
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-  )`
-        await pool.query(q);
-        console.log("users Table Created");
-    } catch (err) {
-        console.error("Error executing query", err.stack);
-    } finally {
-        await pool.end();
-    }
-}
+  console.log("users Table Created");
+};
 
-async function createTaskTable() {
-    try {
-        const q = `
-        CREATE TABLE IF NOT EXISTS Tasks(
-          Task_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-          user_id UUID NOT NULL,
-          title TEXT NOT NULL,
-          description TEXT NOT NULL,
-          CONSTRAINT fk_task_user FOREIGN KEY(user_id) REFERENCES Users(user_id) ON DELETE CASCADE,
-          status TEXT NOT NULL CHECK (status IN ('Complete', 'InComplete')) DEFAULT 'InComplete',
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-        )
-        `;
-        await pool.query(q)
-        console.log("Tasks Table Created");
-    } catch (error) {
-        console.log(error)
-    } 
+export const createTaskTable = async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      user_id UUID REFERENCES users(user_id) ON DELETE CASCADE,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
 
-}
-
-export { createUsersTable, createTaskTable , pool}
+  console.log("tasks Table Created");
+};
