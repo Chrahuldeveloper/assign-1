@@ -6,7 +6,7 @@ const router = express.Router();
 router.post("/", async (req, res, next) => {
   try {
     const { title, description } = req.body;
-    const { userId } = req.user;
+    const userId = req.user.userId;
 
     const result = await pool.query(
       `
@@ -14,7 +14,7 @@ router.post("/", async (req, res, next) => {
       VALUES ($1, $2, $3)
       RETURNING *
       `,
-      [title, description, userId]
+      [title, description || null, userId]
     );
 
     res.status(201).json({
@@ -53,7 +53,7 @@ router.get("/:id", async (req, res, next) => {
     const { userId, role } = req.user;
 
     const result = await pool.query(
-      "SELECT * FROM tasks WHERE id = $1",
+      "SELECT * FROM tasks WHERE task_id = $1",
       [taskId]
     );
 
@@ -63,10 +63,9 @@ router.get("/:id", async (req, res, next) => {
 
     const task = result.rows[0];
 
-    if (role !== "ADMIN" && task.user_id !== userId) {
+    if (role !== "ADMIN" && String(task.user_id) !== String(userId)) {
       return res.status(403).json({ message: "Access denied" });
     }
-
     res.json({ task });
   } catch (err) {
     next(err);
@@ -80,7 +79,7 @@ router.put("/:id", async (req, res, next) => {
     const { userId, role } = req.user;
 
     const taskResult = await pool.query(
-      "SELECT * FROM tasks WHERE id = $1",
+      "SELECT * FROM tasks WHERE task_id = $1",
       [taskId]
     );
 
@@ -90,22 +89,22 @@ router.put("/:id", async (req, res, next) => {
 
     const task = taskResult.rows[0];
 
-    if (role !== "ADMIN" && task.user_id !== userId) {
+    if (role !== "ADMIN" && String(task.user_id) !== String(userId)) {
       return res.status(403).json({ message: "Access denied" });
     }
 
+
     const result = await pool.query(
       `
-      UPDATE tasks
-      SET title = $1,
-          description = $2,
-          updated_at = NOW()
-      WHERE id = $3
-      RETURNING *
-      `,
-      [title, description, taskId]
+  UPDATE tasks
+  SET title = $1,
+      description = $2,
+      updated_at = NOW()
+  WHERE task_id = $3
+  RETURNING *
+  `,
+      [title, description || null, taskId]
     );
-
     res.json({
       message: "Task updated",
       task: result.rows[0]
@@ -121,7 +120,7 @@ router.delete("/:id", async (req, res, next) => {
     const { userId, role } = req.user;
 
     const taskResult = await pool.query(
-      "SELECT * FROM tasks WHERE id = $1",
+      "SELECT * FROM tasks WHERE task_id = $1",
       [taskId]
     );
 
@@ -131,12 +130,12 @@ router.delete("/:id", async (req, res, next) => {
 
     const task = taskResult.rows[0];
 
-    if (role !== "ADMIN" && task.user_id !== userId) {
+    if (role !== "ADMIN" && String(task.user_id) !== String(userId)) {
       return res.status(403).json({ message: "Access denied" });
     }
 
     await pool.query(
-      "DELETE FROM tasks WHERE id = $1",
+      "DELETE FROM tasks WHERE task_id = $1",
       [taskId]
     );
 
@@ -145,5 +144,4 @@ router.delete("/:id", async (req, res, next) => {
     next(err);
   }
 });
-
 export default router;
